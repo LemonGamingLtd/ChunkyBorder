@@ -22,8 +22,10 @@ import org.popcraft.chunky.util.Translator;
 import org.popcraft.chunky.util.Version;
 import org.popcraft.chunkyborder.event.border.BorderChangeEvent;
 import org.popcraft.chunkyborder.event.server.BlockBreakEvent;
+import org.popcraft.chunkyborder.event.server.BlockPistonExtendEvent;
 import org.popcraft.chunkyborder.event.server.BlockPlaceEvent;
 import org.popcraft.chunkyborder.event.server.CreatureSpawnEvent;
+import org.popcraft.chunkyborder.event.server.PlayerMoveEvent;
 import org.popcraft.chunkyborder.event.server.PlayerQuitEvent;
 import org.popcraft.chunkyborder.event.server.PlayerTeleportEvent;
 import org.popcraft.chunkyborder.event.server.WorldLoadEvent;
@@ -82,6 +84,19 @@ public class ChunkyBorder {
             getConfig().reload();
             reloadBorders();
             Translator.addCustomTranslation("custom_border_message", config.message());
+        });
+        eventBus.subscribe(PlayerMoveEvent.class, e -> {
+            final Location to = e.getTo();
+            final Optional<BorderData> borderData = getBorder(to.getWorld().getName());
+            final Player player = e.getPlayer();
+            borderData.ifPresent(border -> {
+                final Shape shape = border.getBorder();
+                if (!shape.isBounding(to.getX(), to.getZ()) 
+                        && !player.hasPermission("chunkyborder.bypass.move")
+                        && !this.getPlayerData(player.getUUID()).isBypassing()) {
+                    e.setCancelled(true);
+                }
+            });
         });
         eventBus.subscribe(PlayerTeleportEvent.class, e -> {
             final Optional<BorderData> borderData = getBorder(e.getLocation().getWorld().getName());
@@ -176,6 +191,20 @@ public class ChunkyBorder {
                         return !border.isBounding(x, z) && !e.getPlayer().hasPermission("chunkyborder.bypass.break");
                     })
                     .orElse(false));
+        });
+        eventBus.subscribe(BlockPistonExtendEvent.class, e -> {
+            final Location pistonLocation = e.getPistonLocation();
+            getBorder(pistonLocation.getWorld().getName()).ifPresent(borderData -> {
+                final Shape border = borderData.getBorder();
+                for (final Location blockLocation : e.getAffectedBlocks()) {
+                    final double x = ((int) blockLocation.getX()) + 0.5;
+                    final double z = ((int) blockLocation.getZ()) + 0.5;
+                    if (!border.isBounding(x, z)) {
+                        e.setCancelled(true);
+                        break;
+                    }
+                }
+            });
         });
         eventBus.subscribe(PlayerQuitEvent.class, e -> players.remove(e.player().getUUID()));
     }

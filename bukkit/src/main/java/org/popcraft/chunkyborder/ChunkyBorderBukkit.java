@@ -30,8 +30,10 @@ import org.popcraft.chunky.util.Translator;
 import org.popcraft.chunkyborder.command.BorderCommand;
 import org.popcraft.chunkyborder.event.border.BorderChangeEvent;
 import org.popcraft.chunkyborder.event.server.BlockBreakEvent;
+import org.popcraft.chunkyborder.event.server.BlockPistonExtendEvent;
 import org.popcraft.chunkyborder.event.server.BlockPlaceEvent;
 import org.popcraft.chunkyborder.event.server.CreatureSpawnEvent;
+import org.popcraft.chunkyborder.event.server.PlayerMoveEvent;
 import org.popcraft.chunkyborder.event.server.PlayerQuitEvent;
 import org.popcraft.chunkyborder.event.server.PlayerTeleportEvent;
 import org.popcraft.chunkyborder.event.server.WorldLoadEvent;
@@ -232,6 +234,27 @@ public final class ChunkyBorderBukkit extends JavaPlugin implements Listener {
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onPlayerMove(final org.bukkit.event.player.PlayerMoveEvent e) {
+        if (e.getTo() == null || e.getTo().getWorld() == null) {
+            return;
+        }
+        if (e.getFrom().getBlockX() == e.getTo().getBlockX() 
+                && e.getFrom().getBlockZ() == e.getTo().getBlockZ()) {
+            return;
+        }
+        final Player player = new BukkitPlayer(e.getPlayer());
+        final World worldFrom = new BukkitWorld(e.getFrom().getWorld());
+        final Location locationFrom = new Location(worldFrom, e.getFrom().getX(), e.getFrom().getY(), e.getFrom().getZ());
+        final World worldTo = new BukkitWorld(e.getTo().getWorld());
+        final Location locationTo = new Location(worldTo, e.getTo().getX(), e.getTo().getY(), e.getTo().getZ());
+        final PlayerMoveEvent playerMoveEvent = new PlayerMoveEvent(player, locationFrom, locationTo);
+        chunkyBorder.getChunky().getEventBus().call(playerMoveEvent);
+        if (playerMoveEvent.isCancelled()) {
+            e.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     public void onPlayerTeleport(final org.bukkit.event.player.PlayerTeleportEvent e) {
         if (e.getTo() == null || e.getTo().getWorld() == null) {
             return;
@@ -290,6 +313,24 @@ public final class ChunkyBorderBukkit extends JavaPlugin implements Listener {
         final BlockBreakEvent blockBreakEvent = new BlockBreakEvent(new BukkitPlayer(e.getPlayer()), new Location(world, bukkitLocation.getX(), bukkitLocation.getY(), bukkitLocation.getZ()));
         chunkyBorder.getChunky().getEventBus().call(blockBreakEvent);
         if (blockBreakEvent.isCancelled()) {
+            e.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onBlockPistonExtend(final org.bukkit.event.block.BlockPistonExtendEvent e) {
+        final org.bukkit.World bukkitWorld = e.getBlock().getWorld();
+        final World world = new BukkitWorld(bukkitWorld);
+        final org.bukkit.Location pistonLoc = e.getBlock().getLocation();
+        final Location pistonLocation = new Location(world, pistonLoc.getX(), pistonLoc.getY(), pistonLoc.getZ());
+        final List<Location> affectedBlocks = new java.util.ArrayList<>();
+        for (final org.bukkit.block.Block block : e.getBlocks()) {
+            final org.bukkit.Location destLoc = block.getRelative(e.getDirection()).getLocation();
+            affectedBlocks.add(new Location(world, destLoc.getX(), destLoc.getY(), destLoc.getZ()));
+        }
+        final BlockPistonExtendEvent pistonEvent = new BlockPistonExtendEvent(pistonLocation, affectedBlocks);
+        chunkyBorder.getChunky().getEventBus().call(pistonEvent);
+        if (pistonEvent.isCancelled()) {
             e.setCancelled(true);
         }
     }
